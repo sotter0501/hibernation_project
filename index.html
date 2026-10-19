@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>적외선 야간 동물 스캐너</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* 브라우저 기본 여백 완벽 제거 */
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: hidden !important;
+      background-color: #000;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      user-select: none;
+    }
+
+    /* 메인 스캐너 컨테이너 */
+    #scanner-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      cursor: none; /* 기본 커서 숨김 */
+    }
+
+    /* 1. 맨 아래 레이어: 적외선 서모그래피 (tree2.png) */
+    .layer-bottom {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-image: url('tree2.png');
+      background-size: 85% auto; /* 크기를 축소 (85%) */
+      background-position: center; /* 정중앙 위치 */
+      background-repeat: no-repeat;
+      z-index: 1;
+    }
+
+    /* 2. 중간 레이어: 동물 히트박스 및 PNG들 (tree.png 뒤에 숨겨짐) */
+    .animal-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 2; /* tree.png(z-index: 3)보다 아래에 위치 */
+    }
+
+    /* 개별 동물 스타일 및 위치 지정 */
+    .animal {
+      position: absolute;
+      cursor: pointer;
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+      transition: transform 0.2s ease, filter 0.2s ease;
+    }
+
+    .animal:hover {
+      transform: scale(1.08);
+      filter: drop-shadow(0 0 12px rgba(0, 240, 255, 0.9));
+    }
+
+    /* 장수풍뎅이 (666.png) */
+    #beetle {
+      top: 18%;
+      left: 52%;
+      width: 6vw;
+      height: 10vh;
+      background-image: url('666.png');
+    }
+
+    /* 다람쥐 (222.png) - 1.5배 확대 유지 */
+    #squirrel {
+      top: 44%;
+      left: 50%;
+      width: 15vw;
+      height: 15vh;
+      background-image: url('222.png');
+    }
+
+    /* 뱀 (444.png) */
+    #snake {
+      top: 78%;
+      left: 20%;
+      width: 14vw;
+      height: 14vh;
+      background-image: url('444.png');
+    }
+
+    /* 고슴도치 (555.png) */
+    #hedgehog {
+      top: 74%;
+      left: 38%;
+      width: 9vw;
+      height: 11vh;
+      background-image: url('555.png');
+    }
+
+    /* 너구리 (777.png) */
+    #raccoon {
+      top: 72%;
+      left: 58%;
+      width: 18vw;
+      height: 18vh;
+      background-image: url('777.png');
+    }
+
+    /* 3. 맨 위 레이어: 흑백 모노톤 나무 (tree.png) - 마우스 구멍 투시 적용 */
+    .layer-top {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-image: url('tree.png');
+      background-size: 85% auto; /* 아래 레이어와 일치하게 크기 축소 (85%) */
+      background-position: center; /* 정중앙 위치 */
+      background-repeat: no-repeat;
+      z-index: 3;
+      pointer-events: none;
+      clip-path: polygon(0% 0%, 0% 100%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 100%, 100% 100%, 100% 0%);
+    }
+
+    /* 4. 마우스 추적 사각형 뷰파인더 테두리 */
+    #lens-frame {
+      position: absolute;
+      pointer-events: none;
+      z-index: 10;
+      border: 1.5px solid rgba(255, 255, 255, 0.9);
+      box-shadow: 0 0 15px rgba(0, 240, 255, 0.3), inset 0 0 10px rgba(0, 240, 255, 0.15);
+      transform: translate(-50%, -50%);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 6px;
+    }
+
+    /* 렌즈 모서리 코너 표시 */
+    .corner {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      border-color: #00f0ff;
+      border-style: solid;
+    }
+    .tl { top: -2px; left: -2px; border-width: 2px 0 0 2px; }
+    .tr { top: -2px; right: -2px; border-width: 2px 2px 0 0; }
+    .bl { bottom: -2px; left: -2px; border-width: 0 0 2px 2px; }
+    .br { bottom: -2px; right: -2px; border-width: 0 2px 2px 0; }
+
+    .hud-text {
+      font-family: monospace;
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.85);
+      text-shadow: 0 0 4px #000;
+    }
+
+    /* 블랙 스타일 모달 */
+    .modal-backdrop {
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(16px);
+      transition: opacity 0.3s ease;
+    }
+
+    .modal-card {
+      background: #000000;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.9), 0 0 30px rgba(0, 240, 255, 0.1);
+      transform: scale(0.95);
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .modal-open .modal-card {
+      transform: scale(1);
+    }
+
+    /* 시작 안내 오버레이 */
+    #start-overlay {
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px);
+      transition: opacity 0.5s ease;
+      cursor: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="scanner-container">
+    
+    <!-- 레이어 1: 적외선 배경 (tree2.png) -->
+    <div class="layer-bottom"></div>
+
+    <!-- 레이어 2: 동면 중인 동물들 (tree.png 뒤에 가려짐) -->
+    <div class="animal-layer">
+      <div id="beetle" class="animal" onclick="openModal('beetle')" title="장수풍뎅이"></div>
+      <div id="squirrel" class="animal" onclick="openModal('squirrel')" title="다람쥐"></div>
+      <div id="snake" class="animal" onclick="openModal('snake')" title="뱀"></div>
+      <div id="hedgehog" class="animal" onclick="openModal('hedgehog')" title="고슴도치"></div>
+      <div id="raccoon" class="animal" onclick="openModal('raccoon')" title="너구리"></div>
+    </div>
+
+    <!-- 레이어 3: 흑백 나무 (tree.png) -->
+    <div class="layer-top" id="layerTop"></div>
+
+    <!-- 마우스 렌즈 프레임 -->
+    <div id="lens-frame" style="width: 200px; height: 200px;">
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+      <div class="flex justify-between items-center hud-text">
+        <span>IR THERMAL 10.4㎛</span>
+        <span id="temp-display">24.2°C</span>
+      </div>
+      <div class="flex justify-between items-end hud-text">
+        <span>SCANNING...</span>
+        <span>LIVE</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 시작 안내 오버레이 -->
+  <div id="start-overlay" class="fixed inset-0 z-40 flex flex-col items-center justify-center text-white p-6 text-center">
+    <div class="bg-black/90 border border-white/20 rounded-2xl p-8 max-w-sm shadow-2xl backdrop-blur-md relative overflow-hidden">
+      <div class="absolute -top-10 -right-10 w-32 h-32 bg-cyan-500/20 rounded-full blur-2xl"></div>
+
+      <div class="w-14 h-14 border border-cyan-400/50 rounded-full flex items-center justify-center mx-auto mb-4 text-cyan-300 animate-pulse text-2xl">
+        🔍
+      </div>
+      <h3 class="text-xl font-bold mb-2 tracking-tight"></h3>
+      <p class="text-xs text-zinc-400 leading-relaxed mb-6">
+        마우스를 움직여보세요.<br>
+        적외선 카메라가 겨울잠 자는 동물들을 비춰줍니다.
+      </p>
+      
+      <button onclick="startScanner()" class="w-full py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-sm tracking-wide transition-all shadow-lg shadow-cyan-500/20 cursor-pointer">
+        탐색 시작하기
+      </button>
+    </div>
+  </div>
+
+  <!-- 순수 블랙 스타일 설명 모달 -->
+  <div id="info-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop opacity-0 pointer-events-none transition-opacity duration-300">
+    <div class="modal-card w-full max-w-md rounded-2xl p-6 text-white relative overflow-hidden">
+      
+      <button onclick="closeModal()" class="absolute top-4 right-4 text-zinc-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-zinc-900 cursor-pointer">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+
+      <div class="flex items-center space-x-2.5 mb-4">
+        <span class="px-2.5 py-0.5 rounded-md text-[10px] font-mono bg-zinc-900 text-cyan-400 border border-cyan-500/30" id="m-tag">
+          SPECIMEN DETECTED
+        </span>
+        <span class="text-[10px] font-mono text-zinc-500" id="m-code">ID-222</span>
+      </div>
+
+      <h2 class="text-2xl font-bold tracking-tight mb-1 text-white" id="m-title">
+        동물 이름
+      </h2>
+      <p class="text-xs text-zinc-500 mb-5 font-mono" id="m-latin">Scientific Name</p>
+
+      <div class="grid grid-cols-2 gap-3 mb-5">
+        <div class="bg-zinc-950 border border-zinc-800 rounded-xl p-3">
+          <div class="text-[11px] text-zinc-500 font-mono mb-1">동면 체온</div>
+          <div class="text-base font-bold text-cyan-400 font-mono" id="m-temp">0.0 °C</div>
+        </div>
+        <div class="bg-zinc-950 border border-zinc-800 rounded-xl p-3">
+          <div class="text-[11px] text-zinc-500 font-mono mb-1">심장 박동 수</div>
+          <div class="text-base font-bold text-rose-500 font-mono" id="m-heart">0 bpm</div>
+        </div>
+      </div>
+
+      <div class="space-y-3 text-xs text-zinc-300 leading-relaxed mb-6" id="m-desc">
+        설명 내용이 여기에 들어갑니다.
+      </div>
+
+      <div class="pt-4 border-t border-zinc-900 flex justify-between items-center text-[11px] font-mono text-zinc-500">
+        <span class="flex items-center space-x-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>THERMAL ANALYSIS</span>
+        </span>
+        <button onclick="closeModal()" class="px-4 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700 transition-all text-xs cursor-pointer">
+          닫기
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const animalData = {
+      squirrel: {
+        code: 'SPECIES-222',
+        title: '다람쥐 (Squirrel)',
+        latin: 'Tamias sibiricus',
+        temp: '3.0 ~ 5.0 °C',
+        heart: '4회 / 분 (평소 350회)',
+        desc: '다람쥐는 겨울잠 동안 체온이 거의 영하 가까이 떨어집니다. 완벽한 가사 상태에 빠지는 대신, 2주에 한 번씩 잠에서 깨어나 미리 저장해둔 도토리나 씨앗을 먹고 다시 잠에 듭니다.',
+        tag: 'PARTIAL HIBERNATION'
+      },
+      snake: {
+        code: 'SPECIES-444',
+        title: '살모사/뱀 (Snake)',
+        latin: 'Serpentes',
+        temp: '1.0 ~ 4.0 °C',
+        heart: '2회 / 분 (체온 연동)',
+        desc: '변온 동물인 뱀은 스스로 체온을 조절할 수 없어 땅속이나 바위 틈의 온도가 유지되는 깊은 곳으로 들어갑니다. 여러 마리가 한곳에 뭉쳐 체온 소실을 막으며 겨울을 보냅니다.',
+        tag: 'ECTOTHERMIC SLEEP'
+      },
+      hedgehog: {
+        code: 'SPECIES-555',
+        title: '고슴도치 (Hedgehog)',
+        latin: 'Erinaceinae',
+        temp: '4.0 °C',
+        heart: '10회 / 분 (평소 190회)',
+        desc: '고슴도치는 진정한 의미의 겨울잠(Hibernation)을 자는 동물입니다. 몸을 단단히 동그랗게 말아 열 손실을 최소화하고, 가을 동안 축적한 지방만을 에너지원으로 삼아 봄까지 견딥니다.',
+        tag: 'DEEP HIBERNATION'
+      },
+      beetle: {
+        code: 'SPECIES-666',
+        title: '장수풍뎅이 애벌레 (Beetle)',
+        latin: 'Allomyrina dichotoma',
+        temp: '0.5 ~ 2.0 °C',
+        heart: '측정 불가 (불활성화)',
+        desc: '장수풍뎅이는 애벌레(3령) 상태로 땅속 깊은 곳이나 썩은 나무 속에서 겨울을 보냅니다. 체내에 혈액 얼음을 방지하는 글리세롤 성분을 만들어 영하의 날씨에도 몸이 얼지 않습니다.',
+        tag: 'INSECT DIAPAUSE'
+      },
+      raccoon: {
+        code: 'SPECIES-777',
+        title: '너구리 (Raccoon Dog)',
+        latin: 'Nyctereutes procyonoides',
+        temp: '31.0 ~ 33.0 °C',
+        heart: '25회 / 분',
+        desc: '개과 동물 중 유일하게 겨울잠을 자는 너구리는 체온을 대폭 낮추지 않는 "겨울 휴면(Winter Sleep)"을 취합니다. 날씨가 따뜻한 날에는 잠시 깨어나 먹이를 찾기도 합니다.',
+        tag: 'WINTER TORPOR'
+      }
+    };
+
+    const container = document.getElementById('scanner-container');
+    const layerTop = document.getElementById('layerTop');
+    const lensFrame = document.getElementById('lens-frame');
+    const tempDisplay = document.getElementById('temp-display');
+    const modal = document.getElementById('info-modal');
+    const startOverlay = document.getElementById('start-overlay');
+
+    const lensSize = 200;
+
+    function startScanner() {
+      startOverlay.style.opacity = '0';
+      setTimeout(() => {
+        startOverlay.style.display = 'none';
+      }, 500);
+    }
+
+    container.addEventListener('mousemove', (e) => {
+      const x = e.clientX;
+      const y = e.clientY;
+
+      lensFrame.style.left = `${x}px`;
+      lensFrame.style.top = `${y}px`;
+
+      const half = lensSize / 2;
+      const top = y - half;
+      const bottom = y + half;
+      const left = x - half;
+      const right = x + half;
+
+      layerTop.style.clipPath = `polygon(
+        0% 0%, 
+        0% 100%, 
+        ${left}px 100%, 
+        ${left}px ${top}px, 
+        ${right}px ${top}px, 
+        ${right}px ${bottom}px, 
+        ${left}px ${bottom}px, 
+        ${left}px 100%, 
+        100% 100%, 
+        100% 0%
+      )`;
+
+      const randomTemp = (21 + (Math.sin(x * 0.01) + Math.cos(y * 0.01)) * 4).toFixed(1);
+      tempDisplay.textContent = `${randomTemp}°C`;
+    });
+
+    function openModal(animalKey) {
+      const data = animalData[animalKey];
+      if (!data) return;
+
+      document.getElementById('m-code').textContent = data.code;
+      document.getElementById('m-title').textContent = data.title;
+      document.getElementById('m-latin').textContent = data.latin;
+      document.getElementById('m-temp').textContent = data.temp;
+      document.getElementById('m-heart').textContent = data.heart;
+      document.getElementById('m-desc').textContent = data.desc;
+      document.getElementById('m-tag').textContent = data.tag;
+
+      modal.classList.remove('opacity-0', 'pointer-events-none');
+      document.body.classList.add('modal-open');
+    }
+
+    function closeModal() {
+      modal.classList.add('opacity-0', 'pointer-events-none');
+      document.body.classList.remove('modal-open');
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModal();
+    });
+  </script>
+</body>
+</html>
